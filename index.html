@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Mealy to Moore Conversion Visualizer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --bg: #f4f6f9;
+  --surface: #ffffff;
+  --surface2: #f0f2f5;
+  --border: #d0d7de;
+  --accent: #1a73e8;
+  --accent3: #27ae60;
+  --text: #24292f;
+  --muted: #6e7781;
+  --mealy: #1a73e8;
+  --moore: #e67e22;
+  --mono: 'Space Mono', monospace;
+  --sans: 'Roboto', sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+header {
+  background: var(--surface);
+  border-bottom: 2px solid var(--border);
+  padding: 14px 28px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+
+header h1 { font-size: 20px; font-weight: 700; color: var(--text); }
+header h1 .mealy-c { color: var(--mealy); }
+header h1 .arrow   { color: var(--muted); margin: 0 6px; }
+header h1 .moore-c { color: var(--moore); }
+
+.tabs {
+  display: flex;
+  padding: 0 28px;
+  border-bottom: 2px solid var(--border);
+  background: var(--surface);
+}
+.tab {
+  padding: 12px 18px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  color: var(--muted);
+  transition: all 0.15s;
+  background: transparent;
+  border-top: none; border-left: none; border-right: none;
+}
+.tab:hover { color: var(--accent); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 700; }
+
+.app-body { padding: 0; }
+.panel { display: none; }
+.panel.active { display: block; }
+
+.sec-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  margin-bottom: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── PANEL 1 ── */
+#panel-input {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  min-height: calc(100vh - 100px);
+}
+.input-sidebar {
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 22px 18px;
+  overflow-y: auto;
+  max-height: calc(100vh - 100px);
+}
+.input-main {
+  padding: 22px 26px;
+  overflow-y: auto;
+  max-height: calc(100vh - 100px);
+}
+
+label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 5px;
+}
+input[type=text], select {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+input[type=text]:focus, select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(26,115,232,0.12);
+}
+.form-row { margin-bottom: 14px; }
+
+.btn {
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 18px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-accent { background: var(--accent); color: #fff; }
+.btn-accent:hover { background: #1558c0; }
+.btn-moore  { background: var(--moore); color: #fff; }
+.btn-moore:hover  { background: #cf6d17; }
+.btn-ghost  { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+.btn-ghost:hover  { border-color: var(--accent); color: var(--accent); background: #f0f6ff; }
+.btn-sm { padding: 6px 12px; font-size: 12px; }
+.btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+
+.trans-table-wrap { overflow-x: auto; margin-top: 8px; }
+table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12px; }
+th {
+  background: var(--surface2);
+  color: var(--muted);
+  padding: 8px 10px;
+  text-align: left;
+  border: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+td { padding: 7px 10px; border: 1px solid var(--border); color: var(--text); background: var(--surface); }
+tr:hover td { background: #f0f6ff; }
+
+.tag-state { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-family: var(--mono); font-weight: 700; }
+.tag-mealy { background: #e8f0fe; color: var(--mealy); border: 1px solid #c5d8fb; }
+.tag-moore  { background: #fef3e8; color: var(--moore);  border: 1px solid #f9d5b0; }
+.tag-start  { background: #e8f5e9; color: var(--accent3);border: 1px solid #b7dfc0; }
+
+/* ── PANEL 2 ── */
+#panel-convert {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  min-height: calc(100vh - 100px);
+}
+.convert-main {
+  padding: 22px 26px;
+  overflow-y: auto;
+  max-height: calc(100vh - 100px);
+}
+.convert-sidebar {
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  padding: 22px 16px;
+  overflow-y: auto;
+  max-height: calc(100vh - 100px);
+}
+
+.step-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.step-card.done-step { border-left: 4px solid var(--accent3); }
+.step-num { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 5px; }
+.step-card h3 { font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+.step-card p, .step-card li { font-size: 13px; color: var(--muted); line-height: 1.7; }
+.step-card ul { padding-left: 16px; }
+
+.moore-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 8px; border-radius: 5px;
+  background: var(--surface2); margin: 3px 0;
+  font-family: var(--mono); font-size: 11px; color: var(--muted);
+}
+
+/* ── PANEL 3 ── */
+#panel-graphs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: calc(100vh - 100px);
+}
+.graph-half { padding: 18px; border-right: 1px solid var(--border); }
+.graph-half:last-child { border-right: none; }
+
+.cy-container {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+.cy-label {
+  position: absolute; top: 10px; left: 12px;
+  font-family: var(--mono); font-size: 10px; font-weight: 700;
+  z-index: 5; padding: 3px 10px; border-radius: 4px;
+}
+.cy-label.mealy { background: #e8f0fe; color: var(--mealy); }
+.cy-label.moore  { background: #fef3e8; color: var(--moore); }
+
+/* ── PANEL 4 ── */
+#panel-simulate { padding: 22px 28px; max-width: 1100px; margin: 0 auto; }
+.sim-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 16px; }
+.sim-machine { background: var(--surface); border-radius: 8px; border: 1px solid var(--border); overflow: hidden; }
+.sim-machine-header {
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 10px; background: var(--surface2);
+}
+.sim-machine-header h3 { font-size: 14px; font-weight: 700; }
+.sim-machine-body { padding: 14px; }
+
+.input-tape { display: flex; gap: 4px; flex-wrap: wrap; margin: 7px 0; min-height: 36px; }
+.tape-cell {
+  width: 32px; height: 32px; border: 2px solid var(--border);
+  border-radius: 5px; display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 13px; font-weight: 700;
+  transition: all 0.2s; background: var(--surface2); color: var(--text);
+}
+.tape-cell.current  { border-color: var(--accent); background: #e8f0fe; color: var(--accent); transform: scale(1.1); }
+.tape-cell.done-cell{ border-color: var(--accent3); color: var(--accent3); opacity: 0.6; }
+
+.output-tape { display: flex; gap: 4px; flex-wrap: wrap; margin: 5px 0; min-height: 32px; }
+.out-cell {
+  width: 32px; height: 32px; border-radius: 5px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 13px; font-weight: 700;
+  background: #fef3e8; border: 2px solid #f9d5b0; color: var(--moore);
+  animation: popIn 0.2s ease;
+}
+@keyframes popIn { from { transform:scale(0.5); opacity:0; } to { transform:scale(1); opacity:1; } }
+
+.state-trace { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-height: 28px; margin: 5px 0; }
+.trace-state { padding: 3px 10px; border-radius: 20px; font-family: var(--mono); font-size: 11px; font-weight: 700; animation: popIn 0.2s ease; }
+.trace-arrow { color: var(--muted); font-size: 12px; }
+
+.step-log {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 6px; padding: 8px 10px; font-family: var(--mono);
+  font-size: 11px; line-height: 2; max-height: 140px; overflow-y: auto; margin-top: 8px; color: var(--muted);
+}
+.log-entry.active { color: var(--text); font-weight: 700; }
+
+/* ── PANEL 5 ── */
+#panel-theory { padding: 28px; max-width: 860px; margin: 0 auto; }
+.theory-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 18px 22px; margin-bottom: 16px; }
+.theory-card h2 { font-size: 16px; font-weight: 700; margin-bottom: 10px; }
+.theory-card p, .theory-card li { font-size: 13px; line-height: 1.8; color: #444; }
+.theory-card ul, .theory-card ol { padding-left: 20px; margin-top: 8px; }
+.theory-card li { margin-bottom: 5px; }
+.formula {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-left: 4px solid var(--accent); border-radius: 6px;
+  padding: 12px 14px; font-family: var(--mono); font-size: 12px;
+  color: var(--text); margin: 12px 0; line-height: 2;
+}
+
+.alert { padding: 10px 14px; border-radius: 6px; font-size: 12px; margin-bottom: 12px; }
+.alert-info    { background: #e8f0fe; border: 1px solid #c5d8fb; color: #1a56b0; }
+.alert-warn    { background: #fff8e1; border: 1px solid #ffe082; color: #8a6d00; }
+.alert-success { background: #e8f5e9; border: 1px solid #b7dfc0; color: #1e6e3a; }
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--surface2); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+@media (max-width: 860px) {
+  #panel-input, #panel-convert, #panel-graphs, .sim-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>
+    <span class="mealy-c">Mealy</span>
+    <span class="arrow">→</span>
+    <span class="moore-c">Moore</span>
+    Conversion Visualizer
+  </h1>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('input')">① Define Mealy</div>
+  <div class="tab" onclick="switchTab('convert')">② Conversion Steps</div>
+  <div class="tab" onclick="switchTab('graphs')">③ Graph View</div>
+  <div class="tab" onclick="switchTab('simulate')">④ Simulate</div>
+  <div class="tab" onclick="switchTab('theory')">📖 Theory</div>
+</div>
+
+<div class="app-body">
+
+  <!-- PANEL 1: INPUT -->
+  <div class="panel active" id="panel-input">
+    <div class="input-sidebar">
+      <div class="sec-title">Machine Setup</div>
+
+      <div class="form-row">
+        <label>Input Alphabet (comma-separated)</label>
+        <input type="text" id="inp-alphabet" value="0,1"/>
+      </div>
+      <div class="form-row">
+        <label>Output Alphabet (comma-separated)</label>
+        <input type="text" id="inp-out-alphabet" value="0,1"/>
+      </div>
+      <div class="form-row">
+        <label>States (comma-separated)</label>
+        <input type="text" id="inp-states" value="q0,q1,q2"/>
+      </div>
+      <div class="form-row">
+        <label>Start State</label>
+        <select id="inp-start"></select>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:18px;">
+        <button class="btn btn-accent" onclick="buildTransitionForm()" style="width:100%">Build Transition Table</button>
+        <button class="btn btn-ghost btn-sm" onclick="resetAll()" style="width:100%">Reset</button>
+      </div>
+    </div>
+
+    <div class="input-main">
+      <div class="sec-title">Mealy Machine — Transition Function</div>
+      <div id="transition-form">
+        <div style="color:var(--muted);font-size:13px;padding:28px;text-align:center;background:var(--surface);border:1px dashed var(--border);border-radius:8px;">
+          Configure the machine on the left, then click <strong>Build Transition Table</strong>.
+        </div>
+      </div>
+      <div id="form-actions" style="display:none;margin-top:14px;">
+        <div class="btn-row">
+          <button class="btn btn-accent" onclick="saveMealy()">Save Mealy Machine</button>
+          <button class="btn btn-ghost btn-sm" onclick="buildTransitionForm()">Rebuild Table</button>
+        </div>
+      </div>
+      <div id="mealy-summary" style="display:none;margin-top:22px;">
+        <div class="sec-title">Saved Mealy Transition Table</div>
+        <div class="trans-table-wrap" id="mealy-table-display"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PANEL 2: CONVERT -->
+  <div class="panel" id="panel-convert">
+    <div class="convert-main">
+      <div class="sec-title">Step-by-Step Conversion: Mealy → Moore</div>
+      <div id="convert-content">
+        <div class="alert alert-warn">Please define and save a Mealy machine first (Tab ①).</div>
+      </div>
+    </div>
+    <div class="convert-sidebar">
+      <div class="sec-title">Moore States Created</div>
+      <div id="moore-states-list"><div style="color:var(--muted);font-size:12px;">Not yet converted.</div></div>
+      <div style="margin-top:16px;" id="convert-btn-wrap"></div>
+    </div>
+  </div>
+
+  <!-- PANEL 3: GRAPHS -->
+  <div class="panel" id="panel-graphs">
+    <div class="graph-half">
+      <div class="sec-title">Mealy Machine</div>
+      <div class="cy-container" style="height:calc(100vh - 172px);">
+        <div class="cy-label mealy">MEALY</div>
+        <div id="cy-mealy" style="width:100%;height:100%;"></div>
+      </div>
+    </div>
+    <div class="graph-half">
+      <div class="sec-title">Moore Machine</div>
+      <div class="cy-container" style="height:calc(100vh - 172px);">
+        <div class="cy-label moore">MOORE</div>
+        <div id="cy-moore" style="width:100%;height:100%;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PANEL 4: SIMULATE -->
+  <div class="panel" id="panel-simulate">
+    <div class="sec-title">Simulate Input String</div>
+    <div class="alert alert-warn" id="sim-alert" style="display:none;"></div>
+    <div style="display:flex;gap:10px;align-items:flex-end;max-width:520px;margin-bottom:18px;">
+      <div style="flex:1">
+        <label>Input String</label>
+        <input type="text" id="sim-input" placeholder="e.g. 0110" oninput="resetSim()"/>
+      </div>
+      <button class="btn btn-accent" onclick="startSim()">▶ Run</button>
+      <button class="btn btn-ghost btn-sm" onclick="stepSim()">Step</button>
+      <button class="btn btn-ghost btn-sm" onclick="resetSim()">↺ Reset</button>
+    </div>
+    <div class="sim-grid">
+      <div class="sim-machine">
+        <div class="sim-machine-header">
+          <span class="tag-state tag-mealy">MEALY</span>
+          <h3>Mealy Machine</h3>
+        </div>
+        <div class="sim-machine-body">
+          <label>Input Tape</label>
+          <div class="input-tape" id="sim-mealy-tape"></div>
+          <label>Output (on transitions)</label>
+          <div class="output-tape" id="sim-mealy-out"></div>
+          <label>State Trace</label>
+          <div class="state-trace" id="sim-mealy-states"></div>
+          <div class="step-log" id="sim-mealy-log"></div>
+        </div>
+      </div>
+      <div class="sim-machine">
+        <div class="sim-machine-header">
+          <span class="tag-state tag-moore">MOORE</span>
+          <h3>Moore Machine</h3>
+        </div>
+        <div class="sim-machine-body">
+          <label>Input Tape</label>
+          <div class="input-tape" id="sim-moore-tape"></div>
+          <label>Output (on states)</label>
+          <div class="output-tape" id="sim-moore-out"></div>
+          <label>State Trace</label>
+          <div class="state-trace" id="sim-moore-states"></div>
+          <div class="step-log" id="sim-moore-log"></div>
+        </div>
+      </div>
+    </div>
+    <div id="sim-verdict" style="margin-top:14px;"></div>
+  </div>
+
+  <!-- PANEL 5: THEORY -->
+  <div class="panel" id="panel-theory">
+    <div class="theory-card">
+      <h2>🔵 Mealy Machine</h2>
+      <p>A <strong style="color:var(--mealy)">Mealy Machine</strong> is a finite state machine where the output depends on both the <em>current state</em> and the <em>current input symbol</em>.</p>
+      <div class="formula">
+        M = (Q, Σ, Δ, δ, λ, q₀)<br>
+        Q  = finite set of states<br>
+        Σ  = input alphabet<br>
+        Δ  = output alphabet<br>
+        δ: Q × Σ → Q &nbsp;&nbsp; (transition function)<br>
+        λ: Q × Σ → Δ &nbsp;&nbsp; (output function — on <u>transitions</u>)<br>
+        q₀ = initial state
+      </div>
+      <ul>
+        <li>Output is produced <strong>on each transition</strong></li>
+        <li>For input of length n → produces <strong>n output symbols</strong></li>
+      </ul>
+    </div>
+    <div class="theory-card">
+      <h2>🟠 Moore Machine</h2>
+      <p>A <strong style="color:var(--moore)">Moore Machine</strong> is a finite state machine where the output depends <em>only</em> on the current state.</p>
+      <div class="formula">
+        M = (Q, Σ, Δ, δ, λ, q₀)<br>
+        Q  = finite set of states<br>
+        Σ  = input alphabet<br>
+        Δ  = output alphabet<br>
+        δ: Q × Σ → Q &nbsp;&nbsp; (transition function)<br>
+        λ: Q → Δ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; (output function — on <u>states</u>)<br>
+        q₀ = initial state
+      </div>
+      <ul>
+        <li>Output is associated with <strong>each state</strong></li>
+        <li>For input of length n → produces <strong>n+1 output symbols</strong></li>
+      </ul>
+    </div>
+    <div class="theory-card">
+      <h2>🔄 Mealy → Moore Conversion Algorithm</h2>
+      <ol>
+        <li><strong>Identify incoming outputs</strong> — For each Mealy state, find all outputs produced on transitions entering it.</li>
+        <li><strong>Create Moore states</strong> — For each (state, incoming-output) pair, create one Moore state [q, z].</li>
+        <li><strong>Handle start state</strong> — The start state gets [q₀, –] since no output has been produced yet.</li>
+        <li><strong>Build transitions</strong> — For Moore state [q, z] on input a: go to [δ(q,a), λ(q,a)] from the Mealy machine.</li>
+        <li><strong>Result</strong> — Both machines are equivalent and produce the same output for any input string.</li>
+      </ol>
+    </div>
+    <div class="theory-card">
+      <h2>📊 Key Differences</h2>
+      <table>
+        <tr><th>Property</th><th style="color:var(--mealy)">Mealy</th><th style="color:var(--moore)">Moore</th></tr>
+        <tr><td>Output depends on</td><td>State + Input</td><td>State only</td></tr>
+        <tr><td>Output location</td><td>On transitions</td><td>On states</td></tr>
+        <tr><td>Output length (input n)</td><td>n symbols</td><td>n+1 symbols</td></tr>
+        <tr><td>Number of states</td><td>Fewer</td><td>Equal or more</td></tr>
+      </table>
+    </div>
+  </div>
+
+</div><!-- end app-body -->
+
+<script>
+let mealy = null, moore = null;
+let cyMealy = null, cyMoore = null;
+let simStep = 0, simMealyCur, simMooreCur;
+let simMealyOut=[], simMooreOut=[], simMealyTrace=[], simMooreTrace=[], simMealyLog=[], simMooreLog=[];
+
+// ── TABS ──
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p=>{p.style.display='none';p.classList.remove('active');});
+  const idx = {input:0,convert:1,graphs:2,simulate:3,theory:4};
+  const ids = ['panel-input','panel-convert','panel-graphs','panel-simulate','panel-theory'];
+  document.querySelectorAll('.tab')[idx[name]].classList.add('active');
+  const p = document.getElementById(ids[idx[name]]);
+  p.style.display=''; p.classList.add('active');
+  if (name==='convert') renderConvertPanel();
+  if (name==='graphs' && moore) setTimeout(renderGraphs,100);
+  if (name==='simulate') renderSimPanel();
+}
+
+document.getElementById('inp-states').addEventListener('input', syncStartSelect);
+function syncStartSelect() {
+  const sel = document.getElementById('inp-start');
+  const cur = sel.value;
+  const states = document.getElementById('inp-states').value.split(',').map(s=>s.trim()).filter(Boolean);
+  sel.innerHTML = states.map(s=>`<option value="${s}"${s===cur?' selected':''}>${s}</option>`).join('');
+}
+syncStartSelect();
+
+// ── BUILD TABLE ──
+function buildTransitionForm() {
+  const states = document.getElementById('inp-states').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const alphabet = document.getElementById('inp-alphabet').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const outAlphabet = document.getElementById('inp-out-alphabet').value.split(',').map(s=>s.trim()).filter(Boolean);
+  if (!states.length||!alphabet.length) return;
+  syncStartSelect();
+
+  let html = `<div class="trans-table-wrap"><table><thead>
+    <tr><th>State</th>${alphabet.map(a=>`<th colspan="2" style="text-align:center;color:var(--mealy)">Input: ${a}</th>`).join('')}</tr>
+    <tr><th></th>${alphabet.map(()=>'<th>Next State</th><th>Output</th>').join('')}</tr>
+  </thead><tbody>`;
+
+  states.forEach(q=>{
+    html += `<tr><td><span class="tag-state tag-mealy">${q}</span></td>`;
+    alphabet.forEach(a=>{
+      html += `<td><select id="next_${q}_${a}">${states.map(s=>`<option value="${s}">${s}</option>`).join('')}</select></td>`;
+      html += `<td><select id="out_${q}_${a}">${outAlphabet.map(o=>`<option value="${o}">${o}</option>`).join('')}</select></td>`;
+    });
+    html += `</tr>`;
+  });
+  html += `</tbody></table></div>`;
+  document.getElementById('transition-form').innerHTML = html;
+  document.getElementById('form-actions').style.display = 'block';
+}
+
+// ── SAVE MEALY ──
+function saveMealy() {
+  const states = document.getElementById('inp-states').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const alphabet = document.getElementById('inp-alphabet').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const outAlphabet = document.getElementById('inp-out-alphabet').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const start = document.getElementById('inp-start').value;
+
+  const transitions = {};
+  states.forEach(q=>{
+    transitions[q]={};
+    alphabet.forEach(a=>{
+      const next=document.getElementById(`next_${q}_${a}`)?.value;
+      const out=document.getElementById(`out_${q}_${a}`)?.value;
+      if(next!==undefined) transitions[q][a]={next,out};
+    });
+  });
+  mealy={states,alphabet,outAlphabet,start,transitions};
+  moore=null;
+
+  let html=`<table><thead><tr><th>State</th>${alphabet.map(a=>`<th colspan="2">Input: ${a}</th>`).join('')}</tr>
+    <tr><th></th>${alphabet.map(()=>'<th>Next State</th><th>Output</th>').join('')}</tr></thead><tbody>`;
+  states.forEach(q=>{
+    html+=`<tr><td><span class="tag-state tag-mealy">${q}</span>${q===start?' <span class="tag-state tag-start">start</span>':''}</td>`;
+    alphabet.forEach(a=>{
+      const t=transitions[q][a];
+      html+=`<td>${t.next}</td><td style="color:var(--moore);font-family:var(--mono);font-weight:700;">${t.out}</td>`;
+    });
+    html+=`</tr>`;
+  });
+  html+=`</tbody></table>`;
+  document.getElementById('mealy-table-display').innerHTML=html;
+  document.getElementById('mealy-summary').style.display='block';
+
+  const note=document.createElement('div');
+  note.className='alert alert-success';
+  note.style.marginTop='10px';
+  note.textContent='✓ Mealy machine saved! Go to Tab ② to run the conversion.';
+  document.getElementById('mealy-summary').after(note);
+  setTimeout(()=>note.remove(),3500);
+}
+
+// ── CONVERSION ──
+function doConvert() {
+  if(!mealy) return;
+  const {states,alphabet,start,transitions}=mealy;
+  const targetOutputs={};
+  states.forEach(p=>targetOutputs[p]=new Set());
+  states.forEach(q=>alphabet.forEach(a=>{
+    const{next:p,out:z}=transitions[q][a];
+    targetOutputs[p].add(z);
+  }));
+
+  const mid=(q,z)=>z==='-'?`[${q},-]`:`[${q},${z}]`;
+  const mooreStates=[{id:mid(start,'-'),orig:start,output:'-'}];
+
+  states.forEach(p=>{
+    const outs=[...targetOutputs[p]];
+    if(!outs.length){
+      const id=mid(p,'-');
+      if(!mooreStates.find(s=>s.id===id)) mooreStates.push({id,orig:p,output:'-'});
+    } else {
+      outs.forEach(z=>{
+        const id=mid(p,z);
+        if(!mooreStates.find(s=>s.id===id)) mooreStates.push({id,orig:p,output:z});
+      });
+    }
+  });
+
+  const mooreTrans={};
+  mooreStates.forEach(ms=>{
+    mooreTrans[ms.id]={};
+    alphabet.forEach(a=>{
+      const{next:p,out:w}=transitions[ms.orig][a];
+      mooreTrans[ms.id][a]=mid(p,w);
+    });
+  });
+
+  moore={states:mooreStates,alphabet,start:mid(start,'-'),transitions:mooreTrans};
+  renderConvertPanel();
+  renderMooreStatesList();
+}
+
+function renderConvertPanel() {
+  if(!mealy){
+    document.getElementById('convert-content').innerHTML='<div class="alert alert-warn">Please define and save a Mealy machine first (Tab ①).</div>';
+    document.getElementById('convert-btn-wrap').innerHTML='';
+    return;
+  }
+  if(!moore){
+    document.getElementById('convert-content').innerHTML=`
+      <div class="alert alert-info">Mealy machine is ready. Click "Run Conversion".</div>
+      <div class="step-card">
+        <div class="step-num">Summary</div>
+        <h3>Mealy Machine</h3>
+        <p>States: <strong>${mealy.states.join(', ')}</strong></p>
+        <p>Alphabet: <strong>${mealy.alphabet.join(', ')}</strong></p>
+        <p>Start state: <strong>${mealy.start}</strong></p>
+      </div>`;
+    document.getElementById('convert-btn-wrap').innerHTML=`<button class="btn btn-moore" onclick="doConvert()" style="width:100%">▶ Run Conversion</button>`;
+    return;
+  }
+
+  const{states,alphabet,transitions}=mealy;
+  const tOut={};
+  states.forEach(p=>tOut[p]=new Set());
+  states.forEach(q=>alphabet.forEach(a=>{const{next:p,out:z}=transitions[q][a];tOut[p].add(z);}));
+
+  let html=`
+  <div class="step-card done-step">
+    <div class="step-num">Step 1 — Identify Incoming Outputs</div>
+    <h3>What outputs reach each Mealy state?</h3>
+    <p>For each state, find all output values produced on transitions that enter that state.</p>
+    <div style="margin-top:10px;">
+  `;
+  states.forEach(p=>{
+    const outs=[...tOut[p]];
+    html+=`<div class="moore-row"><span class="tag-state tag-mealy">${p}</span><span>incoming outputs:</span>${outs.length?outs.map(o=>`<span class="tag-state tag-moore">${o}</span>`).join(' '):'<em>none</em>'}</div>`;
+  });
+  html+=`</div></div>
+  <div class="step-card done-step">
+    <div class="step-num">Step 2 — Create Moore States</div>
+    <h3>One Moore state per (state, output) pair</h3>
+    <p>The start state gets output "–" since no input has been read yet.</p>
+    <div style="margin-top:10px;">
+  `;
+  moore.states.forEach(ms=>{
+    html+=`<div class="moore-row"><span class="tag-state tag-moore">${ms.id}</span>→ output: <strong style="color:var(--accent3)">${ms.output}</strong><span style="color:var(--muted);font-size:10px;">(from ${ms.orig})</span></div>`;
+  });
+  html+=`</div></div>
+  <div class="step-card done-step">
+    <div class="step-num">Step 3 — Moore Transition Table</div>
+    <h3>For [q,z] on input a → go to [δ(q,a), λ(q,a)]</h3>
+    <div class="trans-table-wrap" style="margin-top:10px;"><table><thead><tr>
+      <th>Moore State</th><th>Output (λ)</th>${mealy.alphabet.map(a=>`<th>On '${a}'</th>`).join('')}
+    </tr></thead><tbody>
+  `;
+  moore.states.forEach(ms=>{
+    html+=`<tr><td><span class="tag-state tag-moore">${ms.id}</span>${ms.id===moore.start?' <span class="tag-state tag-start">start</span>':''}</td>
+      <td style="color:var(--accent3);font-family:var(--mono);font-weight:700;">${ms.output}</td>`;
+    mealy.alphabet.forEach(a=>{html+=`<td><span class="tag-state tag-moore">${moore.transitions[ms.id][a]}</span></td>`;});
+    html+=`</tr>`;
+  });
+  html+=`</tbody></table></div></div>
+  <div class="alert alert-success">✓ Done! ${moore.states.length} Moore states created from ${mealy.states.length} Mealy states. Go to Tab ③ to view graphs.</div>`;
+
+  document.getElementById('convert-content').innerHTML=html;
+  document.getElementById('convert-btn-wrap').innerHTML=`<button class="btn btn-accent" onclick="switchTab('graphs')" style="width:100%">View Graphs →</button>`;
+}
+
+function renderMooreStatesList(){
+  if(!moore) return;
+  document.getElementById('moore-states-list').innerHTML=moore.states.map(ms=>
+    `<div class="moore-row" style="margin-bottom:4px;"><span class="tag-state tag-moore">${ms.id}</span><span style="font-size:11px;">λ=<strong style="color:var(--accent3)">${ms.output}</strong></span></div>`
+  ).join('');
+}
+
+// ── GRAPHS ──
+function renderGraphs(){
+  if(mealy) renderMealyGraph();
+  if(moore) renderMooreGraph();
+}
+
+function cySty(color){
+  return[
+    {selector:'node',style:{'background-color':'#fff','border-width':2,'border-color':color,'color':'#24292f','font-family':'Space Mono,monospace','font-size':'11px','text-valign':'center','text-halign':'center','label':'data(label)','width':60,'height':60,'text-wrap':'wrap','text-max-width':'55px'}},
+    {selector:'node.start',style:{'border-color':'#27ae60','border-width':3,'background-color':'#e8f5e9'}},
+    {selector:'edge',style:{'width':2,'line-color':color,'target-arrow-color':color,'target-arrow-shape':'triangle','curve-style':'bezier','label':'data(label)','font-family':'Space Mono,monospace','font-size':'10px','color':'#6e7781','text-background-color':'#fff','text-background-opacity':1,'text-background-padding':'3px','edge-text-rotation':'autorotate','opacity':0.9}},
+    {selector:'edge.self',style:{'curve-style':'loop','loop-direction':'-45deg','loop-sweep':'45deg'}}
+  ];
+}
+
+function renderMealyGraph(){
+  const el=[];
+  mealy.states.forEach(q=>el.push({data:{id:q,label:q},classes:q===mealy.start?'start':''}));
+  const em={};
+  mealy.states.forEach(q=>mealy.alphabet.forEach(a=>{
+    const{next:p,out:z}=mealy.transitions[q][a];
+    const k=`${q}__${p}`;
+    if(!em[k]) em[k]={source:q,target:p,labels:[]};
+    em[k].labels.push(`${a}/${z}`);
+  }));
+  let i=0;
+  Object.values(em).forEach(e=>el.push({data:{id:`e${i++}`,source:e.source,target:e.target,label:e.labels.join('\n')},classes:e.source===e.target?'self':''}));
+  if(cyMealy) cyMealy.destroy();
+  cyMealy=cytoscape({container:document.getElementById('cy-mealy'),elements:el,style:cySty('#1a73e8'),layout:{name:'circle',padding:50}});
+}
+
+function renderMooreGraph(){
+  const el=[];
+  moore.states.forEach(ms=>el.push({data:{id:ms.id,label:`${ms.id}\nλ=${ms.output}`},classes:ms.id===moore.start?'start':''}));
+  const em={};
+  moore.states.forEach(ms=>mealy.alphabet.forEach(a=>{
+    const t=moore.transitions[ms.id][a];
+    const k=`${ms.id}__${t}`;
+    if(!em[k]) em[k]={source:ms.id,target:t,labels:[]};
+    em[k].labels.push(a);
+  }));
+  let i=0;
+  Object.values(em).forEach(e=>el.push({data:{id:`e${i++}`,source:e.source,target:e.target,label:e.labels.join(',')},classes:e.source===e.target?'self':''}));
+  if(cyMoore) cyMoore.destroy();
+  cyMoore=cytoscape({container:document.getElementById('cy-moore'),elements:el,style:cySty('#e67e22'),layout:{name:'circle',padding:50}});
+}
+
+// ── SIMULATE ──
+function renderSimPanel(){
+  const a=document.getElementById('sim-alert');
+  if(!mealy||!moore){a.style.display='block';a.textContent='Please complete the Mealy definition and run conversion first.';}
+  else a.style.display='none';
+}
+
+function resetSim(){
+  simStep=0;
+  simMealyCur=mealy?.start; simMooreCur=moore?.start;
+  simMealyOut=[]; simMooreOut=[]; simMealyTrace=[]; simMooreTrace=[]; simMealyLog=[]; simMooreLog=[];
+  const str=document.getElementById('sim-input').value.trim();
+  renderTape('sim-mealy-tape',str,-1); renderTape('sim-moore-tape',str,-1);
+  ['sim-mealy-out','sim-moore-out','sim-mealy-states','sim-moore-states','sim-mealy-log','sim-moore-log'].forEach(id=>document.getElementById(id).innerHTML='');
+  document.getElementById('sim-verdict').innerHTML='';
+  if(mealy&&simMealyCur){simMealyTrace.push(simMealyCur);renderTrace('sim-mealy-states',simMealyTrace,'#1a73e8');}
+  if(moore&&simMooreCur){
+    simMooreTrace.push(simMooreCur);
+    const so=moore.states.find(s=>s.id===simMooreCur)?.output;
+    if(so&&so!=='-'){simMooreOut.push(so);renderOutputTape('sim-moore-out',simMooreOut);}
+    renderTrace('sim-moore-states',simMooreTrace,'#e67e22');
+  }
+}
+
+function startSim(){
+  if(!mealy||!moore) return;
+  resetSim();
+  const str=document.getElementById('sim-input').value.trim();
+  if(!str) return;
+  let i=0;
+  (function loop(){
+    if(i>=str.length){finishSim();return;}
+    doSimStep(str,i++);
+    setTimeout(loop,600);
+  })();
+}
+
+function stepSim(){
+  if(!mealy||!moore) return;
+  const str=document.getElementById('sim-input').value.trim();
+  if(!str) return;
+  if(simStep===0) resetSim();
+  if(simStep>=str.length){finishSim();return;}
+  doSimStep(str,simStep++);
+  if(simStep>=str.length) finishSim();
+}
+
+function doSimStep(str,i){
+  const a=str[i];
+  renderTape('sim-mealy-tape',str,i); renderTape('sim-moore-tape',str,i);
+  simStep=i+1;
+  if(mealy.transitions[simMealyCur]?.[a]){
+    const{next,out}=mealy.transitions[simMealyCur][a];
+    simMealyLog.push(`Step ${i+1}: δ(${simMealyCur}, ${a}) = ${next},  λ = ${out}`);
+    simMealyCur=next; simMealyOut.push(out); simMealyTrace.push(simMealyCur);
+    renderOutputTape('sim-mealy-out',simMealyOut);
+    renderTrace('sim-mealy-states',simMealyTrace,'#1a73e8');
+    renderLog('sim-mealy-log',simMealyLog);
+  }
+  if(moore.transitions[simMooreCur]?.[a]){
+    const nid=moore.transitions[simMooreCur][a];
+    const nms=moore.states.find(s=>s.id===nid);
+    simMooreLog.push(`Step ${i+1}: δ(${simMooreCur}, ${a}) = ${nid},  output = ${nms?.output}`);
+    simMooreCur=nid;
+    if(nms?.output&&nms.output!=='-') simMooreOut.push(nms.output);
+    simMooreTrace.push(simMooreCur);
+    renderOutputTape('sim-moore-out',simMooreOut);
+    renderTrace('sim-moore-states',simMooreTrace,'#e67e22');
+    renderLog('sim-moore-log',simMooreLog);
+  }
+}
+
+function finishSim(){
+  const mO=simMealyOut.join(''), moO=simMooreOut.join('');
+  document.getElementById('sim-verdict').innerHTML=`
+    <div class="alert ${mO===moO?'alert-success':'alert-warn'}">
+      <strong>Mealy output:</strong> <code>${mO||'(empty)'}</code> &nbsp;|&nbsp;
+      <strong>Moore output:</strong> <code>${moO||'(empty)'}</code><br>
+      ${mO===moO?'✓ Outputs match — the machines are equivalent!':'⚠ Outputs differ (Moore includes one extra symbol from the start state).'}
+    </div>`;
+}
+
+function renderTape(id,str,cur){
+  document.getElementById(id).innerHTML=[...str].map((c,i)=>
+    `<div class="tape-cell ${i===cur?'current':i<cur?'done-cell':''}">${c}</div>`).join('');
+}
+function renderOutputTape(id,arr){
+  document.getElementById(id).innerHTML=arr.map(o=>`<div class="out-cell">${o}</div>`).join('');
+}
+function renderTrace(id,arr,color){
+  document.getElementById(id).innerHTML=arr.map((s,i)=>
+    `${i>0?'<span class="trace-arrow">→</span>':''}<span class="trace-state" style="background:${color}18;color:${color};border:1px solid ${color}44;">${s}</span>`).join('');
+}
+function renderLog(id,entries){
+  const el=document.getElementById(id);
+  el.innerHTML=entries.map((e,i)=>`<div class="log-entry ${i===entries.length-1?'active':''}">${e}</div>`).join('');
+  el.scrollTop=el.scrollHeight;
+}
+
+function resetAll(){
+  mealy=null; moore=null;
+  document.getElementById('inp-states').value='q0,q1,q2';
+  document.getElementById('inp-alphabet').value='0,1';
+  document.getElementById('inp-out-alphabet').value='0,1';
+  syncStartSelect();
+  document.getElementById('transition-form').innerHTML=`<div style="color:var(--muted);font-size:13px;padding:28px;text-align:center;background:var(--surface);border:1px dashed var(--border);border-radius:8px;">Configure the machine on the left, then click <strong>Build Transition Table</strong>.</div>`;
+  document.getElementById('form-actions').style.display='none';
+  document.getElementById('mealy-summary').style.display='none';
+  document.getElementById('convert-content').innerHTML='<div class="alert alert-warn">Please define and save a Mealy machine first (Tab ①).</div>';
+  document.getElementById('moore-states-list').innerHTML='<div style="color:var(--muted);font-size:12px;">Not yet converted.</div>';
+  document.getElementById('convert-btn-wrap').innerHTML='';
+  if(cyMealy){cyMealy.destroy();cyMealy=null;}
+  if(cyMoore){cyMoore.destroy();cyMoore=null;}
+}
+
+document.querySelectorAll('.panel').forEach(p=>{if(!p.classList.contains('active'))p.style.display='none';});
+</script>
+</body>
+</html>
